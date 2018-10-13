@@ -3,6 +3,8 @@ import numpy as np
 import argparse
 import cv2
 
+from scipy.spatial import distance as dist
+
 
 def sort_contours(cnts, *, reverse=False):
     boundingBoxes = [cv2.boundingRect(c) for c in cnts]
@@ -10,6 +12,10 @@ def sort_contours(cnts, *, reverse=False):
     (cnts, boundingBoxes) = zip(*sorted(zip(cnts, boundingBoxes),
                                         key=lambda x: x[1][0], reverse=False))
     return cnts, boundingBoxes
+
+
+def midpoint(ptA, ptB):
+    return ((ptA[0] + ptB[0]) * 0.5, (ptA[1] + ptB[1]) * 0.5)
 
 
 ap = argparse.ArgumentParser()
@@ -62,7 +68,26 @@ for (c, boundingBoxes) in zip(cnts, boundingBoxes):
         continue
 
     box = box_point(boundingBoxes)
+    ''' order the points in the contour such that they appear
+     in top-left, top-right, bottom-right, and bottom-left
+    order'''
     box = order_point(box)
     print(box)
     cx = np.average(box[:, 0])
     cy = np.average(box[:, 1])
+    if refObj is None:
+
+        (tl, tr, br, bl) = box
+        (tlblX, tlblY) = midpoint(tl, bl)
+        (trbrX, trbrY) = midpoint(tr, br)
+        dist.euclidean((tlblX, tlblY), (trbrX, trbrY))
+        refobj = [box, [cx, cy], D / args["width"]]
+        continue
+    orig = image.copy()
+    cv2.drawContours(orig, [box.astype("int")], -1, (0, 255, 0), 2)
+    cv2.drawContours(orig, [refObj[0].astype("int")], -1, (0, 255, 0), 2)
+
+    # stack the reference coordinates and the object coordinates
+    # to include the object center
+    refCoords = np.vstack([refObj[0], refObj[1]])
+    objCoords = np.vstack([box, (cX, cY)])
