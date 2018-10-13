@@ -4,19 +4,22 @@ import cv2
 import numpy as np
 
 
-def sort_contours(cnts: list, *, reverse: bool=False):
+def sort_contours(cnts: list, *, reverse: bool=False)->tuple:
     boundingBoxes = [cv2.boundingRect(c) for c in cnts]
 
     (cnts, boundingBoxes) = zip(*sorted(zip(cnts, boundingBoxes),
                                         key=lambda x: x[1][0], reverse=False))
-    return cnts, boundingBoxes
+    return (cnts, boundingBoxes)
 
 
-def midpoint(ptA, ptB):
+def midpoint(ptA: list, ptB: list)->tuple:
     return ((ptA[0] + ptB[0]) * 0.5, (ptA[1] + ptB[1]) * 0.5)
 
 
-def box_point(_):
+def box_point(_: list)->list:
+    '''
+Convert values from cv2.boundingRect into object space co-ordinates
+    '''
     a = []
     a.append([_[0], _[1]])
     a.append([_[0]+_[2], _[1]])
@@ -26,7 +29,7 @@ def box_point(_):
     return np.asarray(a)
 
 
-def order_point(x):
+def order_point(x: list)->np.array:
     xSorted = x[np.argsort(x[:, 0]), :]
 
     leftMost = xSorted[:2, :]
@@ -36,7 +39,7 @@ def order_point(x):
     return np.array([tl, tr, br, bl], dtype="float32")
 
 
-def resize(image, width=None, height=None, inter=cv2.INTER_AREA):
+def resize(image: np.array, width: int=None, height: int=None, inter: int=cv2.INTER_AREA)->np.array:
 
     # initialize the dimensions of the image to be resized and
     # grab the image size
