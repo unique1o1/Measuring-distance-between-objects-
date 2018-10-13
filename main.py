@@ -4,19 +4,7 @@ import argparse
 import cv2
 
 from scipy.spatial import distance as dist
-
-
-def sort_contours(cnts, *, reverse=False):
-    boundingBoxes = [cv2.boundingRect(c) for c in cnts]
-
-    (cnts, boundingBoxes) = zip(*sorted(zip(cnts, boundingBoxes),
-                                        key=lambda x: x[1][0], reverse=False))
-    return cnts, boundingBoxes
-
-
-def midpoint(ptA, ptB):
-    return ((ptA[0] + ptB[0]) * 0.5, (ptA[1] + ptB[1]) * 0.5)
-
+from modules import *
 
 ap = argparse.ArgumentParser()
 ap.add_argument("-i", "--image", required=True,
@@ -25,6 +13,9 @@ ap.add_argument("-w", "--width", type=float, required=True,
                 help="width of the left-most object in the image (in inches)")
 args = ap.parse_args()
 image = cv2.imread(args.image)
+print(image.shape[1])
+
+image = image if image.shape[1] < 1080 else resize(image, width=1080)
 gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 gray = cv2.GaussianBlur(gray, (7, 7), 0)
 
@@ -40,31 +31,11 @@ cnts = cv2.findContours(edged, cv2.RETR_EXTERNAL,
 cnts, boundingBoxes = sort_contours(cnts, reverse=False)
 colors = ((0, 0, 255), (240, 0, 159), (0, 165, 255), (255, 255, 0),
           (255, 0, 255))
-refobj = None
-
-
-def box_point(_):
-    a = []
-    a.append([_[0], _[1]])
-    a.append([_[0]+_[2], _[1]])
-    a.append([_[0]+_[2], _[1]+_[3]])
-    a.append([_[0], _[1]+_[3]])
-
-    return np.asarray(a)
-
-
-def order_point(x):
-    xSorted = x[np.argsort(x[:, 0]), :]
-
-    leftMost = xSorted[:2, :]
-    rightMost = xSorted[2:, :]
-    (tl, bl) = leftMost[np.argsort(leftMost[:, 1]), :]
-    (tr, br) = rightMost[np.argsort(rightMost[:, 1]), :]
-    return np.array([tl, tr, br, bl], dtype="float32")
+refObj = None
 
 
 for (c, boundingBoxes) in zip(cnts, boundingBoxes):
-    if cv2.contourArea(c) < 100:
+    if cv2.contourArea(c) < 400:
         continue
 
     box = box_point(boundingBoxes)
@@ -73,15 +44,15 @@ for (c, boundingBoxes) in zip(cnts, boundingBoxes):
     order'''
     box = order_point(box)
     print(box)
-    cx = np.average(box[:, 0])
-    cy = np.average(box[:, 1])
+    cX = np.average(box[:, 0])
+    cY = np.average(box[:, 1])
     if refObj is None:
 
         (tl, tr, br, bl) = box
         (tlblX, tlblY) = midpoint(tl, bl)
         (trbrX, trbrY) = midpoint(tr, br)
-        dist.euclidean((tlblX, tlblY), (trbrX, trbrY))
-        refobj = [box, [cx, cy], D / args["width"]]
+        D = dist.euclidean((tlblX, tlblY), (trbrX, trbrY))
+        refObj = [box, [cX, cY], D / args.width]
         continue
     orig = image.copy()
     cv2.drawContours(orig, [box.astype("int")], -1, (0, 255, 0), 2)
@@ -91,3 +62,21 @@ for (c, boundingBoxes) in zip(cnts, boundingBoxes):
     # to include the object center
     refCoords = np.vstack([refObj[0], refObj[1]])
     objCoords = np.vstack([box, (cX, cY)])
+    for ((xA, yA), (xB, yB), color) in zip(refCoords, objCoords, colors):
+        # draw circles corresponding to the current points and
+        # connect them with a line
+        print(((xA, yA), (xB, yB), color))
+        cv2.circle(orig, (int(xA), int(yA)), 5, color, -1)
+        cv2.circle(orig, (int(xB), int(yB)), 5, color, -1)
+        cv2.line(orig, (int(xA), int(yA)), (int(xB), int(yB)), color, 2)
+
+        # compute the Euclidean distance between the coordinates,
+        # and then convert the distance in pixels to distance in
+        # units
+        D = dist.euclidean((xA, yA), (xB, yB)) / refObj[2]
+        (mX, mY) = midpoint((xA, yA), (xB, yB))
+        cv2.putText(orig, "{:.1f}in".format(D), (int(mX+10), int(mY - 10)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2)
+
+        cv2.imshow('asdf', orig)
+        cv2.waitKey(0)
