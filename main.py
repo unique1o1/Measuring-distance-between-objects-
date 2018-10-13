@@ -9,7 +9,7 @@ def sort_contours(cnts, *, reverse=False):
 
     (cnts, boundingBoxes) = zip(*sorted(zip(cnts, boundingBoxes),
                                         key=lambda x: x[1][0], reverse=False))
-    return cnts
+    return cnts, boundingBoxes
 
 
 ap = argparse.ArgumentParser()
@@ -31,7 +31,38 @@ edged = cv2.erode(edged, None, iterations=1)
 # find contours in the edge map
 cnts = cv2.findContours(edged, cv2.RETR_EXTERNAL,
                         cv2.CHAIN_APPROX_SIMPLE)[1]
-cnts = sort_contours(cnts, reverse=False)
+cnts, boundingBoxes = sort_contours(cnts, reverse=False)
 colors = ((0, 0, 255), (240, 0, 159), (0, 165, 255), (255, 255, 0),
           (255, 0, 255))
 refobj = None
+
+
+def box_point(_):
+    a = []
+    a.append([_[0], _[1]])
+    a.append([_[0]+_[2], _[1]])
+    a.append([_[0]+_[2], _[1]+_[3]])
+    a.append([_[0], _[1]+_[3]])
+
+    return np.asarray(a)
+
+
+def order_point(x):
+    xSorted = x[np.argsort(x[:, 0]), :]
+
+    leftMost = xSorted[:2, :]
+    rightMost = xSorted[2:, :]
+    (tl, bl) = leftMost[np.argsort(leftMost[:, 1]), :]
+    (tr, br) = rightMost[np.argsort(rightMost[:, 1]), :]
+    return np.array([tl, tr, br, bl], dtype="float32")
+
+
+for (c, boundingBoxes) in zip(cnts, boundingBoxes):
+    if cv2.contourArea(c) < 100:
+        continue
+
+    box = box_point(boundingBoxes)
+    box = order_point(box)
+    print(box)
+    cx = np.average(box[:, 0])
+    cy = np.average(box[:, 1])
